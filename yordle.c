@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -8,7 +9,9 @@ typedef double LispExpr;
 
 #define ATOM_HEAP_ADDR (char*)g_cell
 
-#define NCELLS 1024
+#define NCELLS 8192
+
+#define BUFFER_SIZE 80
 
 unsigned g_heap_pointer = 0;
 unsigned g_stack_pointer = NCELLS;
@@ -257,6 +260,87 @@ LispExpr eval(LispExpr x, LispExpr e) {
     return TAG_BITS(x) == g_ATOM ? assoc(x, e) :
         TAG_BITS(x) == g_CONS ? apply(eval(car(x), e), cdr(x), e) :
         x;
+}
+
+char g_buf[BUFFER_SIZE];
+char g_see = ' ';
+
+void look() {
+    int c = getchar();
+    g_see = c;
+    if (c == EOF) {
+        exit(0);
+    }
+}
+
+unsigned seeing(char c) {
+    return c == ' ' ? g_see > 0 && g_see <= c : g_see == c;
+}
+
+char get() {
+    char c = g_see;
+    look();
+    return c;
+}
+
+char scan() {
+    unsigned i = 0;
+    while (seeing(' ') || seeing(';')) {
+        if (get() == ';') {
+            while(!seeing('\n')) {
+                look();
+            }
+        }
+    }
+
+    if (seeing('(') || seeing(')') || seeing('\'')) {
+        g_buf[i++] = get();
+    } else {
+        do {
+            g_buf[i++] = get();
+        } while ((i < BUFFER_SIZE - 1) && !seeing('(') && !seeing(')') && !seeing(' '));
+    }
+
+    g_buf[i] = 0;
+    return *g_buf;
+}
+
+LispExpr parse();
+
+LispExpr read() {
+    scan();
+    return parse();
+}
+
+LispExpr list() {
+    LispExpr x;
+    if (scan() == ')') {
+        return g_nil;
+    } else if (!strcmp(g_buf, ".")) {
+        x = read();
+        scan();
+        return x;
+    } else {
+        x = parse();
+        return cons(x, list());
+    }
+}
+
+LispExpr quote() {
+    return cons(atom("quote"), cons(read(), g_nil));
+}
+
+LispExpr atomic() {
+    LispExpr n;
+    unsigned i;
+    return (sscanf(g_buf, "%lg%n", &n, &i) > 0 && !g_buf[i]) ? n :
+        atom(g_buf);
+}
+
+LispExpr parse() {
+    return *g_buf == '(' ? list() :
+        *g_buf == '\'' ? quote() :
+        atomic();
 }
 
 int main() {
