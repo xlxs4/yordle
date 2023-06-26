@@ -403,5 +403,7 @@ int main() {
 
     while (1) {
         printf("\n%u>", g_stack_pointer - g_heap_pointer / 8);
+        print(eval(read(), g_env));
+        gc();
     }
 }
