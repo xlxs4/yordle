@@ -216,7 +216,7 @@ LispExpr f_define(LispExpr t, LispExpr e) {
 struct {
     const char *s;
     LispExpr (*f)(LispExpr, LispExpr);
-} prim[] = {
+} Prim[] = {
     {"eval", f_eval},
     {"quote", f_quote},
     {"cons", f_cons},
@@ -251,7 +251,7 @@ LispExpr reduce(LispExpr f, LispExpr t, LispExpr e) {
 }
 
 LispExpr apply(LispExpr f, LispExpr t, LispExpr e) {
-    return TAG_BITS(f) == g_PRIM ? prim[ord(f)].f(t, e) :
+    return TAG_BITS(f) == g_PRIM ? Prim[ord(f)].f(t, e) :
         TAG_BITS(f) == g_CLOS ? reduce(f, t, e) :
         g_err;
 }
@@ -343,14 +343,49 @@ LispExpr parse() {
         atomic();
 }
 
+void print(LispExpr);
+
+void printlist(LispExpr t) {
+    for (putchar('('); ; putchar(' ')) {
+        print(car(t));
+        t = cdr(t);
+
+        if (TAG_BITS(t) == g_NIL) {
+            break;
+        } else if (TAG_BITS(t) != g_CONS) {
+            printf(" . ");
+            print(t);
+            break;
+        }
+    }
+
+    putchar(')');
+}
+
+void print(LispExpr x) {
+    if (TAG_BITS(x) == g_NIL) {
+        printf("()");
+    } else if (TAG_BITS(x) == g_ATOM) {
+        printf("%s", ATOM_HEAP_ADDR + ord(x));
+    } else if (TAG_BITS(x) == g_PRIM) {
+        printf("<%s>", Prim[ord(x)].s);
+    } else if (TAG_BITS(x) == g_CONS) {
+        printlist(x);
+    } else if (TAG_BITS(x) == g_CLOS) {
+        printf("{%u}", ord(x));
+    } else {
+        printf("%.10lg", x);
+    }
+}
+
 int main() {
     g_nil = box(g_NIL, 0);
     g_true = atom("#t");
     g_err = atom("ERR");
     g_env = pair(g_true, g_true, g_nil);
 
-    for (unsigned i = 0; prim[i].s; ++i) {
-        g_env = pair(atom(prim[i].s), box(g_PRIM, i), g_env);
+    for (unsigned i = 0; Prim[i].s; ++i) {
+        g_env = pair(atom(Prim[i].s), box(g_PRIM, i), g_env);
     }
 
     while (1) {
