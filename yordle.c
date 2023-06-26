@@ -378,6 +378,19 @@ void print(LispExpr x) {
     }
 }
 
+void gc() {
+    g_stack_pointer = ord(g_env);
+
+    unsigned i = g_stack_pointer;
+    for (g_heap_pointer = 0; i < NCELLS; ++i) {
+        if (TAG_BITS(g_cell[i]) == g_ATOM && ord(g_cell[i]) > g_heap_pointer) {
+            g_heap_pointer = ord(g_cell[i]);
+        }
+    }
+
+    g_heap_pointer += strlen(ATOM_HEAP_ADDR + g_heap_pointer) + 1;
+}
+
 int main() {
     g_nil = box(g_NIL, 0);
     g_true = atom("#t");
