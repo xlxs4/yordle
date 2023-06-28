@@ -23,6 +23,9 @@ LispExpr g_cell[NCELLS];
 
 LispExpr g_nil, g_true, g_err, g_env;
 
+char g_buf[BUFFER_SIZE];
+char g_see = ' ';
+
 LispExpr box(unsigned tag, unsigned data) {
     LispExpr x;
     *(uint64_t*)&x = (uint64_t)tag << 48 | data;
@@ -272,6 +275,32 @@ LispExpr f_setcdr(LispExpr t, LispExpr e) {
     return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p)] = car(cdr(t)) : g_err;
 }
 
+LispExpr read();
+
+LispExpr f_read(LispExpr t, LispExpr e) {
+    LispExpr x;
+    char c = g_see;
+    g_see = ' ';
+    x = read();
+    g_see = c;
+    return x;
+}
+
+void print(LispExpr);
+
+LispExpr f_print(LispExpr t, LispExpr e) {
+    for (t = evlis(t, e); TAG_BITS(t) != g_NIL; t = cdr(t)) {
+        print(car(t));
+    }
+    return g_nil;
+}
+
+LispExpr f_println(LispExpr t, LispExpr e) {
+    f_print(t, e);
+    putchar('\n');
+    return g_nil;
+}
+
 struct {
     const char *s;
     LispExpr (*f)(LispExpr, LispExpr);
@@ -304,6 +333,9 @@ struct {
     {"setq", f_setq},
     {"set-car!", f_setcar},
     {"set-cdr!", f_setcdr},
+    {"read", f_read},
+    {"print", f_print},
+    {"println", f_println},
     {0}};
 
 LispExpr bind(LispExpr v, LispExpr t, LispExpr e) {
@@ -333,9 +365,6 @@ LispExpr eval(LispExpr x, LispExpr e) {
         TAG_BITS(x) == g_CONS ? apply(eval(car(x), e), cdr(x), e) :
         x;
 }
-
-char g_buf[BUFFER_SIZE];
-char g_see = ' ';
 
 void look() {
     int c = getchar();
@@ -414,8 +443,6 @@ LispExpr parse() {
         *g_buf == '\'' ? quote() :
         atomic();
 }
-
-void print(LispExpr);
 
 void printlist(LispExpr t) {
     for (putchar('('); ; putchar(' ')) {
