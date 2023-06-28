@@ -213,6 +213,52 @@ LispExpr f_define(LispExpr t, LispExpr e) {
     return car(t);
 }
 
+LispExpr f_assoc(LispExpr t, LispExpr e) {
+    t = evlis(t, e);
+    return assoc(car(t), car(cdr(t)));
+}
+
+LispExpr f_env(LispExpr _, LispExpr e) {
+    return e;
+}
+
+LispExpr f_let(LispExpr t, LispExpr e) {
+    LispExpr d = e;
+    for (; let(t); t = cdr(t)) {
+        d = pair(car(car(t)), eval(car(cdr(car(t))), e), d);
+    }
+    return eval(car(t), d);
+}
+
+LispExpr f_letreca(LispExpr t, LispExpr e) {
+    for (; let(t); t = cdr(t)) {
+        e = pair(car(car(t)), g_err, e); // TODO: change to g_nil after error handling
+        g_cell[g_stack_pointer + 2] = eval(car(cdr(car(t))), e);
+    }
+    return eval(car(t), e);
+}
+
+LispExpr f_setq(LispExpr t, LispExpr e) { // TODO: verify this works as intended.
+    LispExpr v = car(t);
+    LispExpr x = eval(car(cdr(t)), e);
+    while (TAG_BITS(e) == g_CONS && !eq(v, car(car(e)))) {
+        e = cdr(e);
+    }
+    return TAG_BITS(e) == g_CONS ? g_cell[ord(car(e))] = x : g_err;
+}
+
+LispExpr f_setcar(LispExpr t, LispExpr e) {
+    t = evlis(t, e);
+    LispExpr p = car(t);
+    return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p) + 1] = car(cdr(t)) : g_err;
+}
+
+LispExpr f_setcdr(LispExpr t, LispExpr e) {
+    t = evlis(t, e);
+    LispExpr p = car(t);
+    return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p)] = car(cdr(t)) : g_err;
+}
+
 struct {
     const char *s;
     LispExpr (*f)(LispExpr, LispExpr);
@@ -237,6 +283,13 @@ struct {
     {"let*", f_leta},
     {"lambda", f_lambda},
     {"define", f_define},
+    {"assoc", f_assoc},
+    {"env", f_env},
+    {"let", f_let},
+    {"letrec*", f_letreca},
+    {"setq", f_setq},
+    {"set-car!", f_setcar},
+    {"set-cdr!", f_setcdr},
     {0}};
 
 LispExpr bind(LispExpr v, LispExpr t, LispExpr e) {
