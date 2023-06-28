@@ -16,7 +16,8 @@ typedef double LispExpr;
 unsigned g_heap_pointer = 0;
 unsigned g_stack_pointer = NCELLS;
 
-unsigned g_ATOM=0x7ff8, g_PRIM=0x7ff9, g_CONS=0x7ffa, g_CLOS=0x7ffb, g_NIL=0x7ffc;
+unsigned g_ATOM=0x7ff8, g_PRIM=0x7ff9, g_CONS=0x7ffa,
+    g_CLOS=0x7ffb, g_MACR=0x7ffc, g_NIL=0x7ffd;
 
 LispExpr g_cell[NCELLS];
 
@@ -66,11 +67,15 @@ LispExpr cons(LispExpr x, LispExpr y) {
 }
 
 LispExpr car(LispExpr p) {
-    return (TAG_BITS(p) & ~(g_CONS^g_CLOS)) == g_CONS ? g_cell[ord(p) + 1] : g_err;
+    return TAG_BITS(p) == g_CONS || TAG_BITS(p) == g_CLOS || TAG_BITS(p) == g_MACR ?
+        g_cell[ord(p) + 1] :
+        g_err;
 }
 
 LispExpr cdr(LispExpr p) {
-    return (TAG_BITS(p) & ~(g_CONS^g_CLOS)) == g_CONS ? g_cell[ord(p)] : g_err;
+    return TAG_BITS(p) == g_CONS || TAG_BITS(p) == g_CLOS || TAG_BITS(p) == g_MACR ?
+        g_cell[ord(p)] :
+        g_err;
 }
 
 LispExpr pair(LispExpr v, LispExpr x, LispExpr e)  {
@@ -79,6 +84,10 @@ LispExpr pair(LispExpr v, LispExpr x, LispExpr e)  {
 
 LispExpr closure(LispExpr v, LispExpr x, LispExpr e) {
     return box(g_CLOS, ord(pair(v, x, eq(e, g_env) ? g_nil : e)));
+}
+
+LispExpr macro(LispExpr v, LispExpr x) {
+    return box(g_MACR, ord(cons(v, x)));
 }
 
 LispExpr assoc(LispExpr v, LispExpr e) {
@@ -208,6 +217,10 @@ LispExpr f_lambda(LispExpr t, LispExpr e) {
     return closure(car(t), car(cdr(t)), e);
 }
 
+LispExpr f_macro(LispExpr t, LispExpr e) {
+    return macro(car(t), car(cdr(t)));
+}
+
 LispExpr f_define(LispExpr t, LispExpr e) {
     g_env = pair(car(t), eval(car(cdr(t)), e), g_env);
     return car(t);
@@ -282,6 +295,7 @@ struct {
     {"if", f_if},
     {"let*", f_leta},
     {"lambda", f_lambda},
+    {"macro", f_macro},
     {"define", f_define},
     {"assoc", f_assoc},
     {"env", f_env},
@@ -303,9 +317,14 @@ LispExpr reduce(LispExpr f, LispExpr t, LispExpr e) {
 
 }
 
+LispExpr expand(LispExpr f, LispExpr t, LispExpr e) {
+    return eval(eval(cdr(f), bind(car(f), t, g_env)), e);
+}
+
 LispExpr apply(LispExpr f, LispExpr t, LispExpr e) {
     return TAG_BITS(f) == g_PRIM ? Prim[ord(f)].f(t, e) :
         TAG_BITS(f) == g_CLOS ? reduce(f, t, e) :
+        TAG_BITS(f) == g_MACR ? expand(f, t, e) :
         g_err;
 }
 
