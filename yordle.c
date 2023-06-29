@@ -1,3 +1,5 @@
+#include <readline/readline.h>
+#include <readline/history.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +14,7 @@ typedef double LispExpr;
 #define NCELLS 8192
 
 #define BUFFER_SIZE 80
+#define PROMPT_SIZE 20
 
 unsigned g_heap_pointer = 0;
 unsigned g_stack_pointer = NCELLS;
@@ -25,6 +28,11 @@ LispExpr g_nil, g_true, g_err, g_env;
 
 char g_buf[BUFFER_SIZE];
 char g_see = ' ';
+
+char *g_curr_line_char_ptr = "";
+char *g_line = NULL;
+char g_prompt[PROMPT_SIZE];
+FILE *g_in = NULL;
 
 LispExpr box(unsigned tag, unsigned data) {
     LispExpr x;
@@ -367,10 +375,41 @@ LispExpr eval(LispExpr x, LispExpr e) {
 }
 
 void look() {
-    int c = getchar();
-    g_see = c;
-    if (c == EOF) {
-        exit(0);
+    if (g_in) {
+        int c = getc(g_in);
+        g_see = c;
+        if (c != EOF) {
+            return;
+        }
+
+        fclose(g_in);
+        g_in = NULL;
+    }
+
+    if (g_see == '\n') {
+        if (g_line) {
+            free(g_line);
+        }
+
+        do {
+            g_line = readline(g_prompt);
+            g_curr_line_char_ptr = g_line;
+
+            if (g_curr_line_char_ptr == NULL) {
+                stdin = freopen("/dev/tty", "r", stdin);
+                if (stdin == NULL) {
+                    fprintf(stderr, "Unable to reopen stdin from /dev/tty\n");
+                    exit(1);
+                }
+            }
+        } while (g_curr_line_char_ptr == NULL);
+
+        add_history(g_line);
+        strcpy(g_prompt, "?");
+    }
+
+    if (!(g_see = *g_curr_line_char_ptr++)) {
+        g_see = '\n';
     }
 }
 
@@ -490,7 +529,7 @@ void gc() {
     g_heap_pointer += strlen(ATOM_HEAP_ADDR + g_heap_pointer) + 1;
 }
 
-int main() {
+int main(int argc, char **argv) {
     g_nil = box(g_NIL, 0);
     g_true = atom("#t");
     g_err = atom("ERR");
@@ -500,8 +539,12 @@ int main() {
         g_env = pair(atom(Prim[i].s), box(g_PRIM, i), g_env);
     }
 
+    g_in = fopen((argc > 1 ? argv[1] : "prelude.lisp"), "r");
+
+    using_history();
     while (1) {
-        printf("\n%u>", g_stack_pointer - g_heap_pointer / 8);
+        putchar('\n');
+        snprintf(g_prompt, PROMPT_SIZE, "%u>", g_stack_pointer - g_heap_pointer / 8);
         print(eval(read(), g_env));
         gc();
     }
