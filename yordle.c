@@ -7,6 +7,12 @@
 
 typedef double LispExpr;
 
+typedef enum {
+    NO_TRACE,
+    TRACE,
+    TRACE_INTERACTIVE
+} TraceState;
+
 #define TAG_BITS(x) *(uint64_t*)&x >> 48
 
 #define ATOM_HEAP_ADDR (char*)g_cell
@@ -33,6 +39,8 @@ char *g_curr_line_char_ptr = "";
 char *g_line = NULL;
 char g_prompt[PROMPT_SIZE];
 FILE *g_in = NULL;
+
+TraceState g_trace_state;
 
 LispExpr box(unsigned tag, unsigned data) {
     LispExpr x;
@@ -112,7 +120,28 @@ unsigned let(LispExpr t) {
     return TAG_BITS(t) != g_NIL && !not(cdr(t));
 }
 
-LispExpr eval(LispExpr, LispExpr);
+LispExpr step(LispExpr, LispExpr);
+
+void print(LispExpr);
+
+LispExpr eval(LispExpr x, LispExpr e) {
+    LispExpr y = step(x, e);
+    if (g_trace_state == NO_TRACE) {
+        return y;
+    }
+
+    printf("%u: ", g_stack_pointer);
+    print(x);
+    printf(" => ");
+    print(y);
+
+    if (g_trace_state == TRACE_INTERACTIVE) {
+        while (getchar() >= ' ') {
+            continue;
+        }
+    }
+    return y;
+}
 
 LispExpr evlis(LispExpr t, LispExpr e) {
     return TAG_BITS(t) == g_CONS ? cons(eval(car(t), e), evlis(cdr(t), e)) :
@@ -368,7 +397,7 @@ LispExpr apply(LispExpr f, LispExpr t, LispExpr e) {
         g_err;
 }
 
-LispExpr eval(LispExpr x, LispExpr e) {
+LispExpr step(LispExpr x, LispExpr e) {
     return TAG_BITS(x) == g_ATOM ? assoc(x, e) :
         TAG_BITS(x) == g_CONS ? apply(eval(car(x), e), cdr(x), e) :
         x;
@@ -534,6 +563,8 @@ int main(int argc, char **argv) {
     g_true = atom("#t");
     g_err = atom("ERR");
     g_env = pair(g_true, g_true, g_nil);
+
+    g_trace_state = NO_TRACE;
 
     for (unsigned i = 0; Prim[i].s; ++i) {
         g_env = pair(atom(Prim[i].s), box(g_PRIM, i), g_env);
