@@ -348,6 +348,23 @@ LispExpr f_println(LispExpr t, LispExpr e) {
     return g_nil;
 }
 
+LispExpr f_catch(LispExpr t, LispExpr e) {
+    LispExpr x;
+    int jmp_status;
+    jmp_buf saved_jmp_context;
+
+    memcpy(saved_jmp_context, g_jmp_context, sizeof(g_jmp_context));
+    jmp_status = setjmp(g_jmp_context);
+    x = jmp_status ? cons(atom("ERR"), jmp_status) : eval(car(t), e);
+
+    memcpy(g_jmp_context, saved_jmp_context, sizeof(g_jmp_context));
+    return x;
+}
+
+LispExpr f_throw(LispExpr t, LispExpr e) {
+    longjmp(g_jmp_context, (int)num(car(t)));
+}
+
 struct {
     const char *s;
     LispExpr (*f)(LispExpr, LispExpr);
@@ -383,6 +400,8 @@ struct {
     {"read", f_read},
     {"print", f_print},
     {"println", f_println},
+    {"catch", f_catch},
+    {"throw", f_throw},
     {0}};
 
 LispExpr bind(LispExpr v, LispExpr t, LispExpr e) {
