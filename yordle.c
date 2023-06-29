@@ -1,7 +1,11 @@
 #include <readline/readline.h>
 #include <readline/history.h>
+
+#include <setjmp.h>
+
 #include <stdint.h>
 #include <stdlib.h>
+
 #include <string.h>
 #include <stdio.h>
 
@@ -30,7 +34,7 @@ unsigned g_ATOM=0x7ff8, g_PRIM=0x7ff9, g_CONS=0x7ffa,
 
 LispExpr g_cell[NCELLS];
 
-LispExpr g_nil, g_true, g_err, g_env;
+LispExpr g_nil, g_true, g_env;
 
 char g_buf[BUFFER_SIZE];
 char g_see = ' ';
@@ -42,6 +46,8 @@ FILE *g_in = NULL;
 
 TraceState g_trace_state;
 
+jmp_buf g_jmp_context;
+
 LispExpr box(unsigned tag, unsigned data) {
     LispExpr x;
     *(uint64_t*)&x = (uint64_t)tag << 48 | data;
@@ -50,6 +56,10 @@ LispExpr box(unsigned tag, unsigned data) {
 
 unsigned ord(LispExpr x) {
     return *(uint64_t*)&x;
+}
+
+LispExpr err(int i) {
+    longjmp(g_jmp_context, i);
 }
 
 LispExpr num(LispExpr n) {
@@ -71,7 +81,7 @@ LispExpr atom(const char *s) {
     }
 
     if (i == g_heap_pointer && (g_heap_pointer += strlen(strcpy(ATOM_HEAP_ADDR + i, s)) + 1) > g_stack_pointer << 3) {
-        abort();
+        err(6);
     }
     return box(g_ATOM, i);
 }
@@ -80,7 +90,7 @@ LispExpr cons(LispExpr x, LispExpr y) {
     g_cell[--g_stack_pointer] = x;
     g_cell[--g_stack_pointer] = y;
     if (g_heap_pointer > g_stack_pointer << 3) {
-        abort();
+        err(6);
     }
     return box(g_CONS, g_stack_pointer);
 }
@@ -88,13 +98,13 @@ LispExpr cons(LispExpr x, LispExpr y) {
 LispExpr car(LispExpr p) {
     return TAG_BITS(p) == g_CONS || TAG_BITS(p) == g_CLOS || TAG_BITS(p) == g_MACR ?
         g_cell[ord(p) + 1] :
-        g_err;
+        err(1);
 }
 
 LispExpr cdr(LispExpr p) {
     return TAG_BITS(p) == g_CONS || TAG_BITS(p) == g_CLOS || TAG_BITS(p) == g_MACR ?
         g_cell[ord(p)] :
-        g_err;
+        err(1);
 }
 
 LispExpr pair(LispExpr v, LispExpr x, LispExpr e)  {
@@ -113,7 +123,7 @@ LispExpr assoc(LispExpr v, LispExpr e) {
     while (TAG_BITS(e) == g_CONS && !eq(v, car(car(e)))) {
         e = cdr(e);
     }
-    return TAG_BITS(e) == g_CONS ? cdr(car(e)) : g_err;
+    return TAG_BITS(e) == g_CONS ? cdr(car(e)) : err(2);
 }
 
 unsigned let(LispExpr t) {
@@ -285,7 +295,7 @@ LispExpr f_let(LispExpr t, LispExpr e) {
 
 LispExpr f_letreca(LispExpr t, LispExpr e) {
     for (; let(t); t = cdr(t)) {
-        e = pair(car(car(t)), g_err, e); // TODO: change to g_nil after error handling
+        e = pair(car(car(t)), g_nil, e); // TODO: change to g_nil after error handling
         g_cell[g_stack_pointer + 2] = eval(car(cdr(car(t))), e);
     }
     return eval(car(t), e);
@@ -297,19 +307,19 @@ LispExpr f_setq(LispExpr t, LispExpr e) { // TODO: verify this works as intended
     while (TAG_BITS(e) == g_CONS && !eq(v, car(car(e)))) {
         e = cdr(e);
     }
-    return TAG_BITS(e) == g_CONS ? g_cell[ord(car(e))] = x : g_err;
+    return TAG_BITS(e) == g_CONS ? g_cell[ord(car(e))] = x : err(4);
 }
 
 LispExpr f_setcar(LispExpr t, LispExpr e) {
     t = evlis(t, e);
     LispExpr p = car(t);
-    return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p) + 1] = car(cdr(t)) : g_err;
+    return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p) + 1] = car(cdr(t)) : err(5);
 }
 
 LispExpr f_setcdr(LispExpr t, LispExpr e) {
     t = evlis(t, e);
     LispExpr p = car(t);
-    return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p)] = car(cdr(t)) : g_err;
+    return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p)] = car(cdr(t)) : err(5);
 }
 
 LispExpr read();
@@ -394,7 +404,7 @@ LispExpr apply(LispExpr f, LispExpr t, LispExpr e) {
     return TAG_BITS(f) == g_PRIM ? Prim[ord(f)].f(t, e) :
         TAG_BITS(f) == g_CLOS ? reduce(f, t, e) :
         TAG_BITS(f) == g_MACR ? expand(f, t, e) :
-        g_err;
+        err(3);
 }
 
 LispExpr step(LispExpr x, LispExpr e) {
@@ -561,10 +571,11 @@ void gc() {
 int main(int argc, char **argv) {
     g_nil = box(g_NIL, 0);
     g_true = atom("#t");
-    g_err = atom("ERR");
     g_env = pair(g_true, g_true, g_nil);
 
     g_trace_state = NO_TRACE;
+
+    atom("ERR");
 
     for (unsigned i = 0; Prim[i].s; ++i) {
         g_env = pair(atom(Prim[i].s), box(g_PRIM, i), g_env);
@@ -573,10 +584,15 @@ int main(int argc, char **argv) {
     g_in = fopen((argc > 1 ? argv[1] : "prelude.lisp"), "r");
 
     using_history();
+
+    int jmp_status;
+    if ((jmp_status = setjmp(g_jmp_context)) != 0) {
+        printf("ERR %d", jmp_status);
+    }
     while (1) {
+        gc();
         putchar('\n');
         snprintf(g_prompt, PROMPT_SIZE, "%u>", g_stack_pointer - g_heap_pointer / 8);
         print(eval(read(), g_env));
-        gc();
     }
 }
