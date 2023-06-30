@@ -222,4 +222,12 @@
 
 (define odd? (lambda (n) (eq? (mod n 2) 1)))
 
+(define curry (lambda (f x) (lambda args (f x . args))))
+
+(define compose (lambda (f g) (lambda args (f (g . args)))))
+
+(define Y (lambda (f) (lambda args ((f (Y f)) . args))))
+
+(define reveal (lambda (f) (cons 'lambda (cons (car (car f)) (cons (cdr (car f)) ())))))
+
 (define defun (macro (f v x) (list 'define f (list 'lambda v x))))
