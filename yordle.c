@@ -154,9 +154,16 @@ LispExpr eval(LispExpr x, LispExpr e) {
 }
 
 LispExpr evlis(LispExpr t, LispExpr e) {
-    return TAG_BITS(t) == g_CONS ? cons(eval(car(t), e), evlis(cdr(t), e)) :
-        TAG_BITS(t) == g_ATOM ? assoc(t, e) :
-        g_nil;
+    LispExpr s;
+    LispExpr *p;
+    for (s = g_nil, p = &s; TAG_BITS(t) == g_CONS; p = g_cell + g_stack_pointer, t = cdr(t)) {
+        *p = cons(eval(car(t), e), g_nil);
+    }
+
+    if (TAG_BITS(t) == g_ATOM) {
+        *p = assoc(t, e);
+    }
+    return s;
 }
 
 LispExpr f_eval(LispExpr t, LispExpr e) {
@@ -511,16 +518,18 @@ LispExpr read() {
 }
 
 LispExpr list() {
-    LispExpr x;
-    if (scan() == ')') {
-        return g_nil;
-    } else if (!strcmp(g_buf, ".")) {
-        x = read();
-        scan();
-        return x;
-    } else {
-        x = parse();
-        return cons(x, list());
+    LispExpr t;
+    LispExpr *p;
+    for (t = g_nil, p = &t; ; *p = cons(parse(), g_nil), p = g_cell + g_stack_pointer) {
+        if (scan() == ')') {
+            return t;
+        }
+
+        if (*g_buf == '.' && !g_buf[1]) {
+            *p = read();
+            scan();
+            return t;
+        }
     }
 }
 
