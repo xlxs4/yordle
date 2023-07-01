@@ -204,27 +204,27 @@ This form differs slightly in syntax from other Lisp and Scheme implementations,
 evaluates `y` with a local scope of bindings for symbols `v` sequentially bound from the first to the last to the corresponding values of `x`.
 
 > Note that most Lisps use a syntax with binding pairs in a list and one or more body expressions:
-
+>
 > ```lisp
-(let* ((v1 x1)
-       (v2 x2)
-       ...
-       (vk xk))
-       y1
-       ...
-       yn)
+> (let* ((v1 x1)
+>        (v2 x2)
+>        ...
+>        (vk xk))
+>        y1
+>        ...
+>        yn)
 > ```
 
 > In yordle we can do the same by binding all but the last body expression `y` to dummy variables:
-
+>
 > ```lisp
-(let* (v1 x1)
-      (v2 x2)
-      ...
-      (vk xk)
-      (_ y1)
-      ...
-      yn)
+> (let* (v1 x1)
+>       (v2 x2)
+>       ...
+>       (vk xk)
+>       (_ y1)
+>       ...
+>       yn)
 > ```
 
 #### Extras
