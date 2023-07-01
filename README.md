@@ -320,6 +320,12 @@ catches exceptions in the evaluation of an expression, returns the values of the
 
 throws error `n`, where n is a nonzero integer.
 
+```lisp
+(trace n)
+```
+
+sets trace state to `n`, `n` should be `<0|1|2>`.
+
 ### Prelude functions
 
 ```lisp
@@ -442,10 +448,6 @@ evaluates all `x` and returns the value of `xk`.
 ```
 
 returns the length of the list, `0` for `()`.
-
-```lisp
-(append1)
-```
 
 
 ```lisp

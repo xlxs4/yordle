@@ -270,7 +270,9 @@ LispExpr evlis(LispExpr t, LispExpr e) {
  *     (print e)
  *     (println e)
  *     (catch e)           catch exceptions during evaluation of e
- *     (throw n)           throw exception with error code n */
+ *     (throw n)           throw exception with error code n
+ *     (trace n)           change current tracing status, n can be 0|1|2 */
+
 LispExpr f_eval(LispExpr t, LispExpr e) { return eval(car(evlis(t, e)), e); }
 
 LispExpr f_quote(LispExpr t, LispExpr _) { return car(t); }
@@ -467,6 +469,11 @@ LispExpr f_throw(LispExpr t, LispExpr e) {
   longjmp(g_jmp_context, (int)num(car(t)));
 }
 
+LispExpr f_trace(LispExpr t, LispExpr e) {
+  g_trace_state = (TraceState) car(t);
+  return g_nil;
+}
+
 struct {
   const char *s;
   LispExpr (*f)(LispExpr, LispExpr);
@@ -503,6 +510,7 @@ struct {
             {"println", f_println},
             {"catch", f_catch},
             {"throw", f_throw},
+            {"trace", f_trace},
             {0}};
 
 /* Create environment by extending e with variables v bound to values t */
