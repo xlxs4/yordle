@@ -19,6 +19,13 @@ typedef double LispExpr;
  *                       after specified keypress */
 typedef enum { NO_TRACE, TRACE, TRACE_INTERACTIVE } TraceState;
 
+typedef enum {
+  INV_CAR_OR_CDR,
+  SYM_NOT_FOUND,
+  INV_FUN_TYPE,
+  OUT_OF_MEMORY,
+} ErrorCode;
+
 /* Returns the tag bits of a NaN=boxed Lisp expression x */
 #define TAG_BITS(x) *(uint64_t *)&x >> 48
 
@@ -73,8 +80,7 @@ LispExpr box(unsigned tag, unsigned data) {
 /* Returns the ordinal (data/paylaod) of the NaN-boxed x */
 unsigned ord(LispExpr x) { return *(uint64_t *)&x; }
 
-/* TODO: use enum for error codes instead of integers */
-LispExpr err(int i) { longjmp(g_jmp_context, i); }
+LispExpr err(ErrorCode i) { longjmp(g_jmp_context, (int)i); }
 
 /* Returns the NaN-boxed without the tag.
  * This currently passes NaNs to perform arithmetic on, resulting in a NaN.
@@ -104,7 +110,7 @@ LispExpr atom(const char *s) {
                          1) >     // alocate and add a new atom name to the heap
           g_stack_pointer << 3) { // heap ptr points to bytes, stack ptr points
                                   // to 8-byte float
-    err(6);                       // signal error when out of free memory.
+    err(OUT_OF_MEMORY);
   }
   return box(g_ATOM, i);
 }
@@ -116,7 +122,7 @@ LispExpr cons(LispExpr x, LispExpr y) {
   g_cell[--g_stack_pointer] = x; // push the car value in the stack
   g_cell[--g_stack_pointer] = y; // push the cdr value in the stack
   if (g_heap_pointer > g_stack_pointer << 3) {
-    err(6);
+    err(OUT_OF_MEMORY);
   }
   return box(g_CONS, g_stack_pointer);
 }
@@ -125,14 +131,14 @@ LispExpr cons(LispExpr x, LispExpr y) {
 LispExpr car(LispExpr p) {
   return TAG_BITS(p) == g_CONS || TAG_BITS(p) == g_CLOS || TAG_BITS(p) == g_MACR
              ? g_cell[ord(p) + 1]
-             : err(1);
+             : err(INV_CAR_OR_CDR);
 }
 
 /* Get the cdr cell of the pair */
 LispExpr cdr(LispExpr p) {
   return TAG_BITS(p) == g_CONS || TAG_BITS(p) == g_CLOS || TAG_BITS(p) == g_MACR
              ? g_cell[ord(p)]
-             : err(1);
+             : err(INV_CAR_OR_CDR);
 }
 
 /* First construct the name-value Lisp pair (v . x),
@@ -168,7 +174,7 @@ LispExpr assoc(LispExpr v, LispExpr e) {
   while (TAG_BITS(e) == g_CONS && !eq(v, car(car(e)))) {
     e = cdr(e);
   }
-  return TAG_BITS(e) == g_CONS ? cdr(car(e)) : err(2);
+  return TAG_BITS(e) == g_CONS ? cdr(car(e)) : err(SYM_NOT_FOUND);
 }
 
 unsigned let(LispExpr t) { return TAG_BITS(t) != g_NIL && !not(cdr(t)); }
@@ -397,33 +403,31 @@ LispExpr f_let(LispExpr t, LispExpr e) {
 
 LispExpr f_letreca(LispExpr t, LispExpr e) {
   for (; let(t); t = cdr(t)) {
-    e = pair(car(car(t)), g_nil,
-             e); // TODO: change to g_nil after error handling
+    e = pair(car(car(t)), g_nil, e);
     g_cell[g_stack_pointer + 2] = eval(car(cdr(car(t))), e);
   }
   return eval(car(t), e);
 }
 
-LispExpr f_setq(LispExpr t,
-                LispExpr e) { // TODO: verify this works as intended.
+LispExpr f_setq(LispExpr t, LispExpr e) {
   LispExpr v = car(t);
   LispExpr x = eval(car(cdr(t)), e);
   while (TAG_BITS(e) == g_CONS && !eq(v, car(car(e)))) {
     e = cdr(e);
   }
-  return TAG_BITS(e) == g_CONS ? g_cell[ord(car(e))] = x : err(4);
+  return TAG_BITS(e) == g_CONS ? g_cell[ord(car(e))] = x : err(SYM_NOT_FOUND);
 }
 
 LispExpr f_setcar(LispExpr t, LispExpr e) {
   t = evlis(t, e);
   LispExpr p = car(t);
-  return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p) + 1] = car(cdr(t)) : err(5);
+  return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p) + 1] = car(cdr(t)) : err(SYM_NOT_FOUND);
 }
 
 LispExpr f_setcdr(LispExpr t, LispExpr e) {
   t = evlis(t, e);
   LispExpr p = car(t);
-  return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p)] = car(cdr(t)) : err(5);
+  return (TAG_BITS(p) == g_CONS) ? g_cell[ord(p)] = car(cdr(t)) : err(SYM_NOT_FOUND);
 }
 
 LispExpr read();
@@ -538,7 +542,7 @@ LispExpr apply(LispExpr f, LispExpr t, LispExpr e) {
   return TAG_BITS(f) == g_PRIM   ? Prim[ord(f)].f(t, e)
          : TAG_BITS(f) == g_CLOS ? reduce(f, t, e)
          : TAG_BITS(f) == g_MACR ? expand(f, t, e)
-                                 : err(3);
+                                 : err(INV_FUN_TYPE);
 }
 
 /* The core of `eval`. An expression is either a number, an atom, a primitive,
