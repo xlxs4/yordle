@@ -27,7 +27,7 @@ typedef enum { NO_TRACE, TRACE, TRACE_INTERACTIVE } TraceState;
 
 /* Number of cells to use for the shared stack and atom heap.
  * Increase to preallocate more memory */
-#define NCELLS 8192
+#define NCELLS 4096
 
 #define BUFFER_SIZE 80
 #define PROMPT_SIZE 20
@@ -727,7 +727,9 @@ int main(int argc, char **argv) {
     g_env = pair(atom(Prim[i].s), box(g_PRIM, i), g_env);
   }
 
-  g_in = fopen((argc > 1 ? argv[1] : "prelude.lisp"), "r");
+  if (argc > 1) {
+    g_in = fopen((strcmp(argv[1], "p") == 0) ? "prelude.lisp" : argv[1], "r");
+  }
 
   using_history();
 
