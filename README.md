@@ -18,6 +18,16 @@ If you run yordle without any arguments, nothing gets loaded.
 If you run `./yordle p`, it loads a default prelude, found in `prelude.lisp`.
 Note that if you load nothing extra, the base takes up 157 cells, while the prelude takes up an extra 2381 cells as-is.
 
+In the IEEE 754 floating-point format, NaNs are represented by specific bit patterns in the fraction part of a double-precision float.
+There are two types of NaNs, quite NaNs (qNaNs) and Signaling NaNs (sNaNs).
+qNaNs propagate through arithmetic operations without raising exceptions, where sNaNs can raise exceptions.
+NaN boxing leverages takes advantage of the IEEE 754 representation and uses NaN values to store additional information.
+It leverages the remaining bits in the fraction part of NaNs to store type tags and payload data.
+By carefully manipulating these bits, we can encode different types of values within NaNs and perform operations on them.
+NaN boxing provides a compact and efficient way to represent different types of Lisp expressions.
+Instead of using separate data structures or memory allocations for each type, NaN boxing allows us to store various Lisp expression within the same data type without sacrificing performance or introducing excessive memory overhead.
+By type punning the qNaN values, the interpreter can determine the type of the underlying value, e.g., by type punning the NaN value as a pointer to a cons  cell structure.
+
 ### Language features
 
 #### Numbers
