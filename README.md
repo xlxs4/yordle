@@ -25,7 +25,7 @@ NaN boxing takes advantage of the IEEE 754 representation and uses NaN values to
 It leverages the remaining bits in the fraction part of NaNs to store type tags and payload data.
 By carefully manipulating these bits, we can encode different types of values within NaNs and perform operations on them.
 NaN boxing provides a compact and efficient way to represent different types of Lisp expressions.
-Instead of using separate data structures or memory allocations for each type, NaN boxing allows us to store various Lisp expression within the same data type without sacrificing performance or introducing excessive memory overhead.
+Instead of using separate data structures or memory allocations for each type, NaN boxing allows us to store various Lisp expressions within the same data type without sacrificing performance or introducing excessive memory overhead.
 By type punning the qNaN values, the interpreter can determine the type of the underlying value, e.g., by type punning the NaN value as a pointer to a cons  cell structure.
 
 ### Language features
